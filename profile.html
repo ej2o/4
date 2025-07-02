@@ -25,11 +25,11 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, serverTimestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc, serverTimestamp, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"; // إضافة 'collection'
 
     // تكوين Firebase (يُفضل أن يكون من متغيرات البيئة في بيئة Canvas)
     const userProvidedFirebaseConfig = {
-      apiKey: "AIzaSyCuttEadee0V2YOZHmG53a2Rck7AvFCFEM", // استبدل هذا بمفتاح API الفعلي الخاص بك إذا لزم الأمر
+      apiKey: "AIzaSyCuttEadee0V2YOZHmG53a2Rck7AvFCFEM",
       authDomain: "mercato-2cf1d.firebaseapp.com",
       projectId: "mercato-2cf1d",
       storageBucket: "mercato-2cf1d.firebasestorage.app",
@@ -39,7 +39,7 @@
     };
 
     const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userProvidedFirebaseConfig;
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId; // استخدام projectId كافتراضي
     window.mercatoAppId = appId;
 
     const app = initializeApp(firebaseConfig);
@@ -55,11 +55,11 @@
       getDoc: getDoc,
       setDoc: setDoc,
       serverTimestamp: serverTimestamp,
-      onSnapshot: onSnapshot // مطلوب لرأس الصفحة للاستماع إلى تغييرات السلة
+      onSnapshot: onSnapshot,
+      collection: collection // جعل collection متاحًا عالميًا
     };
-    window.firebaseAuthInstance = auth; // جعل مثيل المصادقة متاحًا لتسجيل الخروج
+    window.firebaseAuthInstance = auth;
 
-    // إضافة وظائف Firebase Auth لتغيير كلمة المرور وإعادة تعيينها
     window.firebaseAuthFunctions = {
         updatePassword: updatePassword,
         reauthenticateWithCredential: reauthenticateWithCredential,
@@ -97,7 +97,7 @@
 
     window.handleSignOut = async () => {
       try {
-        await signOut(window.firebaseAuthInstance); // استخدام مثيل المصادقة المعروض عالميًا
+        await signOut(window.firebaseAuthInstance);
         window.location.href = 'login.html';
       } catch (error) {
         console.error("حدث خطأ أثناء تسجيل الخروج: ", error);
@@ -471,6 +471,7 @@
     const Header = ({ currentUser }) => {
       const [isLoggedIn, setIsLoggedIn] = useState(false);
       const [cartItemCount, setCartItemCount] = useState(0);
+      const [userCountryName, setUserCountryName] = useState('غير محدد'); // لاسم الدولة في الهيدر
 
       useEffect(() => {
         setIsLoggedIn(!!currentUser);
@@ -480,34 +481,75 @@
       useEffect(() => {
         let unsubscribeCart = () => {};
         if (currentUser && currentUser.uid && window.firebaseFirestore && window.firebaseFirestore.onSnapshot) {
-          const userCartRef = window.firebaseFirestore.doc(
-            window.firebaseFirestore.dbInstance,
+          const dbInstance = window.firebaseFirestore.getFirestore();
+          // المسار الصحيح لمجموعة cartItems
+          const userCartCollectionRef = window.firebaseFirestore.collection(
+            dbInstance,
             'artifacts',
             window.mercatoAppId,
             'users',
             currentUser.uid,
-            'userCart',
-            'items' // المسار إلى مستند السلة الذي يحتوي على مصفوفة العناصر
+            'cartItems' // هذا هو المسار الذي تستخدمه صفحات المنتجات
           );
 
-          unsubscribeCart = window.firebaseFirestore.onSnapshot(userCartRef, (docSnap) => {
-            if (docSnap.exists() && docSnap.data().items) {
-              const items = docSnap.data().items;
-              // حساب العدد الإجمالي للكميات في السلة
-              setCartItemCount(items.reduce((total, item) => total + (item.quantity || 0), 0));
-            } else {
-              setCartItemCount(0);
-            }
+          console.log("Header: Listening to cart changes at:", userCartCollectionRef.path);
+
+          unsubscribeCart = window.firebaseFirestore.onSnapshot(userCartCollectionRef, (snapshot) => {
+            let totalCount = 0;
+            snapshot.forEach(doc => {
+                const itemData = doc.data();
+                // إذا كان لديك حقل quantity في مستندات السلة، استخدمه، وإلا فافترض 1
+                totalCount += itemData.quantity || 1; 
+            });
+            setCartItemCount(totalCount);
+            console.log("Header: Cart items updated. Total:", totalCount);
           }, (error) => {
-            console.error("خطأ في جلب عناصر سلة التسوق:", error);
-            // اختياريًا، عرض مودال هنا إذا فشل جلب السلة
+            console.error("Header: Error fetching cart items:", error);
           });
         } else {
-          setCartItemCount(0); // إعادة تعيين عدد السلة إذا قام المستخدم بتسجيل الخروج
+          setCartItemCount(0);
+          console.log("Header: Not listening to cart (no user or Firebase not ready).");
         }
 
-        return () => unsubscribeCart(); // تنظيف المستمع عند إلغاء تحميل المكون
-      }, [currentUser]); // إعادة التشغيل عند تغيير currentUser
+        return () => unsubscribeCart();
+      }, [currentUser]);
+
+      // تأثير للاستماع إلى تغييرات ملف تعريف المستخدم لجلب الدولة
+      useEffect(() => {
+        let unsubscribeProfile = () => {};
+        if (currentUser && currentUser.uid && window.firebaseFirestore) {
+          const dbInstance = window.firebaseFirestore.getFirestore();
+          const userProfileDocRef = window.firebaseFirestore.doc(
+            dbInstance,
+            'artifacts',
+            window.mercatoAppId,
+            'users',
+            currentUser.uid,
+            'userProfiles',
+            'profile'
+          );
+
+          unsubscribeProfile = window.firebaseFirestore.onSnapshot(userProfileDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              const fetchedCountryCode = data.country;
+              const country = countries.find(c => c.code === fetchedCountryCode);
+              setUserCountryName(country ? country.name : 'غير محدد');
+              // تحديث localStorage لضمان التناسق عبر الصفحات
+              if (fetchedCountryCode) {
+                localStorage.setItem('mercato_selected_country', fetchedCountryCode);
+              }
+            } else {
+              setUserCountryName('غير محدد');
+            }
+          }, (error) => {
+            console.error("Header: Error listening to user profile for country:", error);
+          });
+        } else {
+          setUserCountryName('غير محدد');
+        }
+        return () => unsubscribeProfile();
+      }, [currentUser]);
 
       const handleLogout = () => {
         if (window.handleSignOut) {
@@ -580,6 +622,12 @@
                     </svg>
                     الملف الشخصي
                   </a>
+                  {/* قائمة منسدلة لتسجيل الخروج */}
+                    <div className="absolute right-0 mt-0.5 w-24 bg-[#1F2E40] text-gray-200 rounded-sm shadow-sm opacity-0 group-hover:opacity-100 group-hover:visible transition-all duration-300 transform scale-95 group-hover:scale-100 pointer-events-none group-hover:pointer-events-auto text-xs">
+                        <a href="#" onClick={handleLogout} className="block px-1.5 py-1 hover:bg-[#2C3E50] rounded-xs text-red-400 font-semibold">
+                        تسجيل الخروج
+                        </a>
+                    </div>
                 </div>
               ) : (
                 <div className="flex space-x-1.5 space-x-reverse">
@@ -729,26 +777,28 @@
         { code: 'OM', name: 'عمان' },
         { code: 'EG', name: 'مصر' },
         { code: 'AE', name: 'الإمارات' },
+        { code: 'SY', name: 'سوريا' },
+        { code: 'LB', name: 'لبنان' }
     ];
 
     // --- مكون صفحة الملف الشخصي (ProfilePage) ---
     const ProfilePage = ({ currentUser }) => {
       const [userProfile, setUserProfile] = useState(null);
-      const [editMode, setEditMode] = useState(false); // وضع التحرير للبيانات الأساسية
+      const [editMode, setEditMode] = useState(false);
       const [editedName, setEditedName] = useState('');
       const [selectedCountry, setSelectedCountry] = useState('');
       const [loading, setLoading] = useState(true);
       const [modal, setModal] = useState(null);
       const [isUpdating, setIsUpdating] = useState(false);
-      const [activeTab, setActiveTab] = useState('profile'); // tabs: profile, security
+      const [activeTab, setActiveTab] = useState('profile');
 
       // New states for password change/reset
       const [oldPassword, setOldPassword] = useState('');
       const [newPassword, setNewPassword] = useState('');
       const [confirmNewPassword, setConfirmNewPassword] = useState('');
-      const [forgotPasswordMode, setForgotPasswordMode] = useState(false); // true if user clicked "Forgot Password?"
-      const [resetEmailSent, setResetEmailSent] = useState(false); // true after sending reset email
-      const [verificationCode, setVerificationCode] = useState(''); // For the "code" input
+      const [forgotPasswordMode, setForgotPasswordMode] = useState(false);
+      const [resetEmailSent, setResetEmailSent] = useState(false);
+      const [verificationCode, setVerificationCode] = useState('');
       const [isPasswordChanging, setIsPasswordChanging] = useState(false);
       const [isSendingResetEmail, setIsSendingResetEmail] = useState(false);
       const [isVerifyingCode, setIsVerifyingCode] = useState(false);
@@ -759,9 +809,6 @@
       const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
       const [showResetNewPassword, setShowResetNewPassword] = useState(false);
       const [showResetConfirmNewPassword, setShowResetConfirmNewPassword] = useState(false);
-
-
-      const [cartItems, setCartItems] = useState([]); // لحفظ عناصر السلة
 
       // تأثير لجلب ملف تعريف المستخدم
       useEffect(() => {
@@ -775,76 +822,48 @@
           setLoading(true);
           try {
             const dbInstance = window.firebaseFirestore.getFirestore();
-            // مسار Firestore لملف تعريف المستخدم
             const userDocRef = window.firebaseFirestore.doc(dbInstance, 'artifacts', window.mercatoAppId, 'users', currentUser.uid, 'userProfiles', 'profile');
-            const userDocSnap = await window.firebaseFirestore.getDoc(userDocRef);
-
-            if (userDocSnap.exists()) {
-              const data = userDocSnap.data();
-              setUserProfile(data);
-              setEditedName(data.name || ''); // تعيين الاسم القابل للتحرير
-              // إذا كانت الدولة موجودة في البيانات، استخدمها، وإلا فاستخدم "لم يتم الاختيار"
-              setSelectedCountry(data.country && countries.some(c => c.code === data.country) ? data.country : 'لم يتم الاختيار');
-              // تخزين الدولة في localStorage لتعميمها على مستوى التطبيق
-              if (data.country) {
-                localStorage.setItem('mercato_selected_country', data.country);
-              }
-            } else {
-              // إذا لم يكن هناك ملف شخصي، قم بإنشاء واحد أساسي
-              await window.firebaseFirestore.setDoc(userDocRef, {
-                email: currentUser.email,
-                createdAt: window.firebaseFirestore.serverTimestamp(),
-                country: 'لم يتم الاختيار', // قيمة افتراضية
-                name: '', // اسم افتراضي فارغ
-              });
-              setUserProfile({ email: currentUser.email, country: 'لم يتم الاختيار', name: '' });
-              setEditedName('');
-              setSelectedCountry('لم يتم الاختيار');
-              localStorage.setItem('mercato_selected_country', 'لم يتم الاختيار'); // تحديث localStorage
-              setModal({ message: 'تم إنشاء ملفك الشخصي بنجاح! يرجى إكمال بياناتك.', type: 'success', onClose: () => setModal(null) });
-            }
+            
+            // استخدام onSnapshot لجلب الملف الشخصي وتحديثه في الوقت الفعلي
+            const unsubscribe = window.firebaseFirestore.onSnapshot(userDocRef, async (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setUserProfile(data);
+                    setEditedName(data.name || '');
+                    const fetchedCountry = data.country && countries.some(c => c.code === data.country) ? data.country : 'SA'; // الافتراضي 'SA'
+                    setSelectedCountry(fetchedCountry);
+                    localStorage.setItem('mercato_selected_country', fetchedCountry); // تحديث localStorage
+                } else {
+                    // إذا لم يكن هناك ملف شخصي، قم بإنشاء واحد أساسي
+                    const defaultCountry = 'SA';
+                    await window.firebaseFirestore.setDoc(userDocRef, {
+                        email: currentUser.email,
+                        createdAt: window.firebaseFirestore.serverTimestamp(),
+                        country: defaultCountry,
+                        name: '',
+                    }, { merge: true });
+                    setUserProfile({ email: currentUser.email, country: defaultCountry, name: '' });
+                    setEditedName('');
+                    setSelectedCountry(defaultCountry);
+                    localStorage.setItem('mercato_selected_country', defaultCountry);
+                    setModal({ message: 'تم إنشاء ملفك الشخصي بنجاح! يرجى إكمال بياناتك.', type: 'success', onClose: () => setModal(null) });
+                }
+                setLoading(false);
+            }, (error) => {
+                console.error("خطأ في جلب أو إنشاء ملف تعريف المستخدم:", error);
+                setModal({ message: 'تعذر تحميل أو إنشاء ملفك الشخصي. يرجى المحاولة مرة أخرى.', type: 'error', onClose: () => setModal(null) });
+                setLoading(false);
+            });
+            return () => unsubscribe(); // تنظيف المستمع
           } catch (error) {
-            console.error("خطأ في جلب أو إنشاء ملف تعريف المستخدم:", error);
-            setModal({ message: 'تعذر تحميل أو إنشاء ملفك الشخصي. يرجى المحاولة مرة أخرى.', type: 'error', onClose: () => setModal(null) });
-          } finally {
+            console.error("خطأ في تهيئة مستمع الملف الشخصي:", error);
+            setModal({ message: 'حدث خطأ غير متوقع في تهيئة الملف الشخصي.', type: 'error', onClose: () => setModal(null) });
             setLoading(false);
           }
         };
 
         fetchUserProfile();
-      }, [currentUser]); // إعادة التشغيل عند تغيير كائن currentUser
-
-      // تأثير لجلب عناصر السلة في الوقت الفعلي
-      useEffect(() => {
-        let unsubscribeCart = () => {};
-        if (currentUser && currentUser.uid && window.firebaseFirestore && window.firebaseFirestore.onSnapshot) {
-          const userCartDocRef = window.firebaseFirestore.doc(
-            window.firebaseFirestore.dbInstance,
-            'artifacts',
-            window.mercatoAppId,
-            'users',
-            currentUser.uid,
-            'userCart', // هذا هو اسم المجموعة
-            'items' // هذا هو معرف المستند الفعلي داخل userCart الذي يحتوي على مصفوفة العناصر
-          );
-
-          unsubscribeCart = window.firebaseFirestore.onSnapshot(userCartDocRef, (docSnap) => {
-            if (docSnap.exists() && docSnap.data().items) {
-              setCartItems(docSnap.data().items);
-            } else {
-              setCartItems([]);
-            }
-          }, (err) => {
-            console.error("خطأ في جلب عناصر السلة لصفحة الملف الشخصي:", err);
-            // لا نعرض رسالة خطأ للمستخدم هنا، لأن صفحة السلة الرئيسية هي المسؤولة عن ذلك
-          });
-        } else {
-          setCartItems([]);
-        }
-
-        return () => unsubscribeCart(); // إزالة المستمع عند إلغاء تحميل المكون
-      }, [currentUser]); // إعادة التشغيل عند تغيير حالة المستخدم
-
+      }, [currentUser]);
 
       const handleCountryChange = (e) => {
         setSelectedCountry(e.target.value);
@@ -879,9 +898,8 @@
             country: selectedCountry
           }, { merge: true });
 
-          setUserProfile(prev => ({ ...prev, name: editedName, country: selectedCountry }));
-          localStorage.setItem('mercato_selected_country', selectedCountry); // تحديث localStorage
-          setEditMode(false); // الخروج من وضع التحرير بعد التحديث
+          // onSnapshot listener will handle updating userProfile state and localStorage
+          setEditMode(false);
           setModal({ message: 'تم تحديث ملفك الشخصي بنجاح!', type: 'success', onClose: () => setModal(null) });
         } catch (error) {
           console.error("خطأ في تحديث الملف الشخصي:", error);
@@ -912,10 +930,8 @@
 
         setIsPasswordChanging(true);
         try {
-          // إعادة مصادقة المستخدم قبل تغيير كلمة المرور
           const credential = window.firebaseAuthFunctions.EmailAuthProvider.credential(currentUser.email, oldPassword);
           await window.firebaseAuthFunctions.reauthenticateWithCredential(currentUser, credential);
-          // تحديث كلمة المرور
           await window.firebaseAuthFunctions.updatePassword(currentUser, newPassword);
           setModal({ message: 'تم تغيير كلمة المرور بنجاح!', type: 'success', onClose: () => setModal(null) });
           setOldPassword('');
@@ -945,10 +961,10 @@
         try {
           await window.firebaseAuthFunctions.sendPasswordResetEmail(window.firebaseAuthInstance, currentUser.email);
           setModal({ message: `تم إرسال رابط إعادة تعيين كلمة المرور إلى ${currentUser.email}. يرجى التحقق من بريدك الوارد.`, type: 'success', onClose: () => setModal(null) });
-          setResetEmailSent(true); // Indicate that email has been sent
-          setVerificationCode(''); // Clear code field
-          setNewPassword(''); // Clear new password field
-          setConfirmNewPassword(''); // Clear confirm new password field
+          setResetEmailSent(true);
+          setVerificationCode('');
+          setNewPassword('');
+          setConfirmNewPassword('');
         } catch (error) {
           console.error("خطأ في إرسال بريد إعادة تعيين كلمة المرور:", error);
           let errorMessage = 'فشل إرسال بريد إعادة تعيين كلمة المرور. يرجى المحاولة مرة أخرى.';
@@ -963,14 +979,6 @@
 
       // Placeholder for verifying code and resetting password (UI only for now)
       const handleVerifyCodeAndResetPassword = async () => {
-        // ملاحظة: في تطبيق Firebase حقيقي، تتضمن هذه العملية عادةً:
-        // 1. قيام المستخدم بالنقر على رابط في بريده الإلكتروني يحتوي على oobCode.
-        // 2. يقوم التطبيق بعد ذلك باستخدام `auth.verifyPasswordResetCode(oobCode)` للتحقق من الرمز.
-        // 3. ثم `auth.confirmPasswordReset(oobCode, newPassword)` لتعيين كلمة المرور الجديدة.
-        // نظرًا لأن المستخدم طلب إدخال "رمز" داخل التطبيق، سنقوم بمحاكاته لواجهة المستخدم.
-        // التنفيذ الفعلي للتحقق من هذا الرمز وإعادة تعيين كلمة المرور داخل التطبيق أكثر تعقيدًا
-        // ويتطلب عادةً Firebase Admin SDK أو Cloud Functions.
-        
         if (!verificationCode || !newPassword || !confirmNewPassword) {
           setModal({ message: 'الرجاء تعبئة جميع الحقول: رمز التحقق وكلمة المرور الجديدة وتأكيدها.', type: 'error', onClose: () => setModal(null) });
           return;
@@ -985,14 +993,13 @@
         }
 
         setIsVerifyingCode(true);
-        // محاكاة استدعاء API
         setTimeout(() => {
             setModal({ message: 'تم إرسال طلب إعادة تعيين كلمة المرور. يرجى التحقق من بريدك الإلكتروني لإكمال العملية.', type: 'success', onClose: () => setModal(null) });
             setVerificationCode('');
             setNewPassword('');
             setConfirmNewPassword('');
-            setForgotPasswordMode(false); // الخروج من وضع "نسيت كلمة المرور"
-            setResetEmailSent(false); // إعادة تعيين حالة إرسال البريد الإلكتروني
+            setForgotPasswordMode(false);
+            setResetEmailSent(false);
             setIsVerifyingCode(false);
         }, 1500);
       };
@@ -1090,7 +1097,7 @@
                                 onChange={handleCountryChange}
                                 className="block w-full p-2.5 rounded-lg border border-[#5A7D9D] focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37] transition-all duration-300 text-sm bg-[#2C3E50] text-[#F8F8F8] appearance-none"
                             >
-                                <option value="لم يتم الاختيار" disabled>اختر دولتك</option>
+                                <option value="SA" disabled={selectedCountry !== 'SA' && selectedCountry !== '' && selectedCountry !== 'لم يتم الاختيار'}>اختر دولتك</option> {/* Keep SA as default if not set */}
                                 {countries.map((country) => (
                                     <option key={country.code} value={country.code}>
                                         {country.name}
@@ -1146,9 +1153,8 @@
             )}
 
             {activeTab === 'security' && (
-              <div className="tab-content-section security-tab-content w-full max-w-xs mx-auto"> {/* إضافة security-tab-content class هنا */}
+              <div className="tab-content-section security-tab-content w-full max-w-xs mx-auto">
                 <h3 className="text-xl font-bold text-[#D4AF37] mb-4 text-center">تغيير كلمة المرور</h3>
-                {/* التحقق مما إذا كان المستخدم قد سجل الدخول باستخدام بريد إلكتروني وكلمة مرور */}
                 {currentUser?.providerData && currentUser.providerData[0]?.providerId === 'password' ? (
                     <>
                         {!forgotPasswordMode ? (
@@ -1249,7 +1255,7 @@
                                     )}
                                 </button>
                                 <button
-                                    onClick={() => { setForgotPasswordMode(true); setOldPassword(''); setConfirmNewPassword(''); }}
+                                    onClick={() => { setForgotPasswordMode(true); setOldPassword(''); setNewPassword(''); setConfirmNewPassword(''); }}
                                     className="btn-secondary w-full text-base py-2.5"
                                 >
                                     نسيت كلمة المرور؟
