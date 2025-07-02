@@ -504,10 +504,43 @@
       );
     };
 
-    // --- Header Component ---
-    const Header = ({ currentUser, cartItemCount }) => {
-        // حالة تسجيل الدخول لم تعد تستخدم هنا للتحقق، بل يتم تمريرها
-        // عدد عناصر السلة (CartItemCount) سيتم جلبه من المكون الأب (App)
+    // --- Header Component (Updated for Cart Page) ---
+    const Header = ({ currentUser }) => {
+        const [cartItemCount, setCartItemCount] = useState(0);
+
+        useEffect(() => {
+            let unsubscribeCart = () => {};
+            if (currentUser && currentUser.uid && window.firebaseFirestore && window.firebaseFirestore.onSnapshot) {
+                const dbInstance = window.firebaseFirestore.getFirestore();
+                const userCartCollectionRef = window.firebaseFirestore.collection(
+                    dbInstance,
+                    'artifacts',
+                    window.mercatoAppId, 
+                    'users',
+                    currentUser.uid,
+                    'cartItems'
+                );
+                console.log("Header: Listening to cart changes at:", userCartCollectionRef.path);
+
+                unsubscribeCart = window.firebaseFirestore.onSnapshot(userCartCollectionRef, (snapshot) => {
+                    let totalCount = 0;
+                    snapshot.forEach(doc => {
+                        const itemData = doc.data();
+                        totalCount += itemData.quantity || 0; // Sum quantities if available, else count as 1
+                    });
+                    setCartItemCount(totalCount);
+                    console.log("Header: Cart items updated. Total:", totalCount);
+                }, (error) => {
+                    console.error("Header: Error fetching cart items:", error);
+                    // Optionally show a modal here, but might be too frequent for header
+                });
+            } else {
+                setCartItemCount(0);
+                console.log("Header: Not listening to cart (no user or Firebase not ready).");
+            }
+
+            return () => unsubscribeCart();
+        }, [currentUser]); // Re-run effect if currentUser changes
 
         const handleGoBack = () => {
             history.back();
@@ -556,9 +589,9 @@
                 </a>
                 </nav>
 
-                {/* أزرار الملف الشخصي/تسجيل الخروج (أقصى اليسار) - تم حذف أزرار تسجيل الدخول وإنشاء حساب */}
+                {/* أزرار الملف الشخصي/تسجيل الخروج (أقصى اليسار) */}
                 <div className="flex items-center space-x-1.5 space-x-reverse">
-                    {/* زر السلة - تم إعادته هنا مع العدد الصحيح من firebase */}
+                    {/* زر السلة */}
                     <a href="cart.html"
                         className="relative p-1.5 rounded-full bg-[#5A7D9D] hover:bg-[#D4AF37] hover:text-[#1A2C42] transition-colors flex items-center justify-center text-white focus:outline-none focus:ring-1 focus:ring-[#D4AF37]"
                         aria-label="السلة"
@@ -604,6 +637,7 @@
 
     // --- Product Card Component ---
     const ProductCard = ({ item, onRemoveItem }) => {
+      // استخدم product.displayPrice مباشرة، مع التأكد من تحويله لرقم إذا لزم الأمر
       const itemPrice = parseFloat(String(item.displayPrice || '0').replace(/[^\d.]/g, '')) || 0;
 
       return (
@@ -760,6 +794,7 @@
       const [modalInfo, setModalInfo] = useState(null); // State for CustomModal
       
       // State for user country, initialized from localStorage or default 'SA'
+      // This is important for consistency across pages
       const [userCountry, setUserCountry] = useState(() => localStorage.getItem('mercato_selected_country') || 'SA');
 
       // Function to display a custom modal (replaces alert/confirm)
@@ -809,32 +844,31 @@
         }
 
         return () => unsubscribeProfile();
-      }, [currentUser, showModal, userCountry]);
+      }, [currentUser, showModal, userCountry]); // userCountry as dependency to re-run if it changes locally
 
-      // Fetch products from Firestore - UPDATED TO LISTEN TO COLLECTION
+      // Fetch products from Firestore - UPDATED TO LISTEN TO CART ITEMS
       useEffect(() => {
         let unsubscribeProducts = () => {};
 
-        // This check is very important. Ensure user is actually logged in before trying to fetch data.
         if (!currentUser || !currentUser.uid || currentUser.isAnonymous || !window.firebaseFirestore || !window.firebaseFirestore.dbInstance) {
-          console.warn("App: Firebase or user not ready or user is anonymous. Cannot fetch products.");
+          console.warn("App: Firebase or user not ready or user is anonymous. Cannot fetch cart items.");
           setLoading(false);
           setProducts([]);
           return;
         }
 
         const userId = currentUser.uid;
-        // CORRECTED: Products are now fetched from the 'cartItems' COLLECTION
+        // Reference to the user's specific cartItems collection
         const userCartCollectionRef = window.firebaseFirestore.collection(
           window.firebaseFirestore.dbInstance,
           'artifacts',
           window.mercatoAppId,
           'users',
           userId,
-          'cartItems' // This should match the collection used by the "Add to Cart" button
+          'cartItems' 
         );
 
-        console.log("App: Subscribing to products in cartItems collection at:", userCartCollectionRef.path);
+        console.log("App: Subscribing to cart items collection at:", userCartCollectionRef.path);
 
         unsubscribeProducts = window.firebaseFirestore.onSnapshot(userCartCollectionRef, (snapshot) => {
           const fetchedProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -860,7 +894,7 @@
 
         try {
           const userId = currentUser.uid;
-          // CORRECTED: Reference to the specific document to delete within the 'cartItems' collection
+          // Reference to the specific document to delete within the 'cartItems' collection
           const productDocRef = window.firebaseFirestore.doc(
             window.firebaseFirestore.dbInstance,
             'artifacts',
@@ -881,7 +915,7 @@
         }
       };
 
-      const totalProductsCount = products.length;
+      const totalProductsCount = products.length; // This will be passed to Header
 
       if (loading) {
         return (
@@ -907,7 +941,7 @@
       if (products.length === 0) { 
         return (
           <div dir="rtl" className="flex flex-col min-h-screen">
-            <Header currentUser={currentUser} cartItemCount={totalProductsCount} /> {/* Pass count to Header */}
+            <Header currentUser={currentUser} /> {/* Pass currentUser to Header */}
             <div className="flex-grow overflow-y-auto main-scroll-content">
                 <main className="container mx-auto my-6 px-2.5 relative z-30">
                 {/* Product Summary (moved to top) */}
@@ -943,7 +977,7 @@
 
       return (
         <div dir="rtl" className="flex flex-col min-h-screen">
-          <Header currentUser={currentUser} cartItemCount={totalProductsCount} /> {/* Pass count to Header */}
+          <Header currentUser={currentUser} /> {/* Pass currentUser to Header */}
           <div className="flex-grow overflow-y-auto main-scroll-content">
             <main className="container mx-auto my-6 px-2.5 relative z-30">
                 {/* Product Summary (moved to top) */}
