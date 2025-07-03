@@ -34,7 +34,7 @@
       projectId: "mercato-2cf1d",
       storageBucket: "mercato-2cf1d.firebasestorage.app",
       messagingSenderId: "896887505927",
-      appId: "1:896887505927:web:6cb474408bdcfdb1e216a2", // تم تحديث هذا الـ appId
+      appId: "1:896887505927:web:6cb474409bdcfdb1e216a2",
       measurementId: "G-4WNGK0W077"
     };
 
@@ -486,12 +486,94 @@
     };
 
     // --- مكون الرأس (Header Component) ---
-    const Header = ({ currentUser, cartItemCount }) => {
+    const Header = ({ currentUser }) => { // Removed cartItemCount prop here, it will be fetched internally
       const [isLoggedIn, setIsLoggedIn] = useState(false);
+      const [cartItemCount, setCartItemCount] = useState(0); // State for cart count in Header
+      const [userCountryName, setUserCountryName] = useState('غير محدد'); // State for country name in Header
 
       useEffect(() => {
         setIsLoggedIn(!!currentUser);
       }, [currentUser]);
+
+      // Effect to listen for real-time cart item changes
+      useEffect(() => {
+        let unsubscribeCart = () => {};
+        if (currentUser && currentUser.uid && window.firebaseFirestore && window.firebaseFirestore.onSnapshot) {
+          const dbInstance = window.firebaseFirestore.getFirestore();
+          // Correct path for cartItems collection
+          const userCartCollectionRef = window.firebaseFirestore.collection(
+            dbInstance,
+            'artifacts',
+            window.mercatoAppId,
+            'users',
+            currentUser.uid,
+            'cartItems'
+          );
+
+          console.log("Header: Listening to cart changes at:", userCartCollectionRef.path);
+
+          unsubscribeCart = window.firebaseFirestore.onSnapshot(userCartCollectionRef, (snapshot) => {
+            let totalCount = 0;
+            snapshot.forEach(doc => {
+                const itemData = doc.data();
+                totalCount += itemData.quantity || 1; // Sum quantities if available, else count as 1
+            });
+            setCartItemCount(totalCount);
+            console.log("Header: Cart items updated. Total:", totalCount);
+          }, (error) => {
+            console.error("Header: Error fetching cart items:", error);
+            // Do NOT show modal here to avoid annoying popups on every page load/error
+          });
+        } else {
+          setCartItemCount(0);
+          console.log("Header: Not listening to cart (no user or Firebase not ready).");
+        }
+
+        return () => unsubscribeCart(); // Clean up listener
+      }, [currentUser]); // Re-run effect if currentUser changes
+
+      // Effect to listen for real-time user profile (country) changes
+      useEffect(() => {
+        let unsubscribeProfile = () => {};
+        if (currentUser && currentUser.uid && window.firebaseFirestore) {
+          const dbInstance = window.firebaseFirestore.getFirestore();
+          const userProfileDocRef = window.firebaseFirestore.doc(
+            dbInstance,
+            'artifacts',
+            window.mercatoAppId,
+            'users',
+            currentUser.uid,
+            'userProfiles',
+            'profile'
+          );
+
+          unsubscribeProfile = window.firebaseFirestore.onSnapshot(userProfileDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              const fetchedCountryCode = data.country;
+              const country = countries.find(c => c.code === fetchedCountryCode);
+              setUserCountryName(country ? country.name : 'غير محدد');
+              // Update localStorage to ensure consistency across pages
+              if (fetchedCountryCode) {
+                localStorage.setItem('mercato_selected_country', fetchedCountryCode);
+              }
+            } else {
+              setUserCountryName('غير محدد');
+            }
+          }, (error) => {
+            console.error("Header: Error listening to user profile for country:", error);
+          });
+        } else {
+          setUserCountryName('غير محدد');
+        }
+        return () => unsubscribeProfile();
+      }, [currentUser]);
+
+      const handleLogout = () => {
+        if (window.handleSignOut) {
+          window.handleSignOut();
+        }
+      };
 
       return (
         <header className="header-bg text-white p-1.5 shadow-sm rounded-b-md relative z-50">
@@ -499,7 +581,7 @@
             {/* الشعار والعنوان (يمين) */}
             <div className="flex items-center space-x-1.5 space-x-reverse">
               <img
-                src="https://i.postimg.cc/8CpKtfQw/file-0000000018d862468d05a4f4346102fe-1.png"
+                src="https://i.postimg.cc/kGPQ7cK1/Screenshot-Canva.jpg" {/* Updated Logo URL */}
                 alt="ميركاتو"
                 className="w-auto h-8 object-contain rounded-sm shadow-xs border border-[#D4AF37]"
                 onError={(e) => {
@@ -519,7 +601,7 @@
 
             {/* قائمة التنقل الرئيسية (المنتصف) */}
             <nav className="flex items-center space-x-2 space-x-reverse text-xs font-semibold flex-grow justify-center">
-              <a href="allcategorues.html" className="hover:text-[#D4AF37] transition-colors p-0.5 rounded-xs hover:bg-white hover:bg-opacity-10">
+              <a href="all-categories.html" className="hover:text-[#D4AF37] transition-colors p-0.5 rounded-xs hover:bg-white hover:bg-opacity-10">
                 أقسامنا
               </a>
               <a href="daily-deals.html" className="hover:text-[#D4AF37] transition-colors p-0.5 rounded-xs hover:bg-white hover:bg-opacity-10">
@@ -549,12 +631,20 @@
 
               {isLoggedIn ? (
                 // إذا كان المستخدم مسجلاً دخولاً، اعرض زر الملف الشخصي فقط
-                <a href="profile.html" className="flex items-center text-white font-bold py-1 px-2 rounded-full bg-[#5A7D9D] hover:bg-[#D4AF37] hover:text-[#1A2C42] transition-colors duration-300 shadow-xs text-xs">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-user-circle ml-0.5">
-                      <circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/>
-                    </svg>
-                    الملف الشخصي
-                </a>
+                <div className="relative group">
+                  <a href="profile.html" className="flex items-center text-white font-bold py-1 px-2 rounded-full bg-[#5A7D9D] hover:bg-[#D4AF37] hover:text-[#1A2C42] transition-colors duration-300 shadow-xs text-xs">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-user-circle ml-0.5">
+                        <circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/>
+                      </svg>
+                      الملف الشخصي
+                  </a>
+                  {/* قائمة منسدلة لتسجيل الخروج */}
+                  <div className="absolute right-0 mt-0.5 w-24 bg-[#1F2E40] text-gray-200 rounded-sm shadow-sm opacity-0 group-hover:opacity-100 group-hover:visible transition-all duration-300 transform scale-95 group-hover:scale-100 pointer-events-none group-hover:pointer-events-auto text-xs">
+                      <a href="#" onClick={handleLogout} className="block px-1.5 py-1 hover:bg-[#2C3E50] rounded-xs text-red-400 font-semibold">
+                      تسجيل الخروج
+                      </a>
+                  </div>
+                </div>
               ) : (
                 // إذا لم يكن مسجلاً دخولاً، اعرض أزرار تسجيل الدخول وإنشاء حساب
                 <div className="flex space-x-1.5 space-x-reverse">
@@ -624,7 +714,7 @@
               <h3 className="text-base font-bold mb-1.5 text-[#D4AF37]">روابط سريعة</h3>
               <ul className="space-y-0.75">
                 <li>
-                  <a href="allcategorues.html" className="text-gray-400 hover:text-white transition-colors text-xs">
+                  <a href="all-categories.html" className="text-gray-400 hover:text-white transition-colors text-xs">
                     أقسامنا
                   </a>
                 </li>
@@ -795,7 +885,6 @@
     const App = ({ currentUser }) => {
       const [searchTerm, setSearchTerm] = useState(''); // تم الاحتفاظ بها في الوقت الحالي، ولكن شريط البحث تم إزالته
       const [displayedProducts, setDisplayedProducts] = useState(PRODUCTS_DATA);
-      const [cartItemCount, setCartItemCount] = useState(0); // حالة لعدد عناصر سلة التسوق
       const [modal, setModal] = useState(null); // لعرض رسائل الإضافة إلى سلة التسوق
 
       // عبارات اللافتة الترويجية المتغيرة
@@ -809,14 +898,13 @@
       ];
       const [currentPhraseIndex, setCurrentPhraseIndex] = useState(0);
 
-      // صور التسوق الجديدة (روابط حقيقية من Unsplash)
+      // صور التسوق الجديدة (5 صور فقط)
       const shoppingImages = [
-        'https://images.unsplash.com/photo-1483985988355-fee6b24806a4?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D', // حقائب تسوق
-        'https://images.unsplash.com/photo-1496181133206-817ebfd0eab6?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D', // تسوق عبر الإنترنت على لابتوب
-        'https://images.unsplash.com/photo-1572521165329-b05f293c3594?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D', // بطاقات ائتمان / دفع
-        'https://images.unsplash.com/photo-1581044777550-4cfa60707c03?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D', // امرأة تجرب ملابس
-        'https://images.unsplash.com/photo-1526178613552-2b45f6903ba2?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D', // متجر إلكترونيات
-        'https://images.unsplash.com/photo-1541107758764-cf6a36215329?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'  // منتجات تجميل / عناية
+        'https://i.postimg.cc/N0V8zYMw/Screenshot-Canva.jpg',
+        'https://i.postimg.cc/P5SQ11nJ/Screenshot-Canva.jpg',
+        'https://i.postimg.cc/DwvcWBDR/Screenshot-Canva.jpg',
+        'https://i.postimg.cc/m2Gj4bSL/Screenshot-Canva.jpg',
+        'https://i.postimg.cc/T1ncbSTv/Screenshot-Canva.jpg'
       ];
 
 
@@ -828,38 +916,45 @@
         return () => clearInterval(interval); // تنظيف المؤقت عند إلغاء تحميل المكون
       }, []);
 
-      // تأثير للاستماع إلى تغييرات سلة التسوق في Firestore
+      // تأثير لجلب ملف تعريف المستخدم لتعيين الدولة في localStorage
       useEffect(() => {
-        let unsubscribeCart = () => {};
-        if (currentUser && currentUser.uid) {
-          const userCartRef = window.firebaseFirestore.doc(
-            window.firebaseFirestore.dbInstance,
+        let unsubscribeProfile = () => {};
+        if (currentUser && currentUser.uid && window.firebaseFirestore) {
+          const dbInstance = window.firebaseFirestore.getFirestore();
+          const userProfileDocRef = window.firebaseFirestore.doc(
+            dbInstance,
             'artifacts',
             window.mercatoAppId,
             'users',
             currentUser.uid,
-            'userCart',
-            'items'
+            'userProfiles',
+            'profile'
           );
 
-          unsubscribeCart = window.firebaseFirestore.onSnapshot(userCartRef, (docSnap) => {
-            if (docSnap.exists() && docSnap.data().items) {
-              // حساب العدد الإجمالي للعناصر (مع مراعاة الكمية)
-              const totalItems = docSnap.data().items.reduce((acc, item) => acc + (item.quantity || 0), 0);
-              setCartItemCount(totalItems);
+          unsubscribeProfile = window.firebaseFirestore.onSnapshot(userProfileDocRef, async (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              const fetchedCountry = data.country || 'SA'; 
+              localStorage.setItem('mercato_selected_country', fetchedCountry);
             } else {
-              setCartItemCount(0);
+              // If profile doesn't exist, create it with default country
+              const defaultCountry = 'SA';
+              await window.firebaseFirestore.setDoc(userProfileDocRef, {
+                email: currentUser.email || 'anonymous@mercato.com', 
+                createdAt: window.firebaseFirestore.serverTimestamp(),
+                country: defaultCountry,
+                name: ''
+              }, { merge: true });
+              localStorage.setItem('mercato_selected_country', defaultCountry);
             }
           }, (error) => {
-            console.error("خطأ في جلب عناصر سلة التسوق:", error);
-            setModal({ message: 'فشل في تحميل عناصر السلة.', type: 'error', onClose: () => setModal(null) });
+            console.error("App: Error listening to user profile for country sync:", error);
+            // No modal here, as it's a background sync for country
           });
-        } else {
-          setCartItemCount(0); // إعادة تعيين عدد السلة إذا قام المستخدم بتسجيل الخروج
         }
+        return () => unsubscribeProfile();
+      }, [currentUser]);
 
-        return () => unsubscribeCart(); // تنظيف المستمع عند إلغاء تحميل المكون
-      }, [currentUser]); // إعادة التشغيل عند تغيير currentUser
 
       useEffect(() => {
         // لا يوجد شريط بحث، لذا سيعرض هذا التأثير جميع بيانات المنتجات
@@ -873,43 +968,48 @@
         }
 
         try {
-          const userCartDocRef = window.firebaseFirestore.doc(
-            window.firebaseFirestore.dbInstance,
-            'artifacts',
-            window.mercatoAppId,
-            'users',
-            currentUser.uid,
-            'userCart',
-            'items'
+          const dbInstance = window.firebaseFirestore.getFirestore();
+          const cartItemsCollectionRef = window.firebaseFirestore.collection(
+              dbInstance,
+              'artifacts',
+              window.mercatoAppId, 
+              'users',
+              currentUser.uid,
+              'cartItems' // هذا هو المسار الصحيح لمجموعة cartItems
           );
 
-          // الحصول على عناصر السلة الحالية
-          const docSnap = await window.firebaseFirestore.getDoc(userCartDocRef);
-          let currentCartItems = [];
-          if (docSnap.exists() && docSnap.data().items) {
-            currentCartItems = docSnap.data().items;
-          }
-
           // التحقق مما إذا كان العنصر موجودًا بالفعل في السلة لتحديث الكمية
-          const existingItemIndex = currentCartItems.findIndex(item => item.id === productToAdd.id);
+          const q = window.firebaseFirestore.query(cartItemsCollectionRef, window.firebaseFirestore.where('productId', '==', productToAdd.id));
+          const querySnapshot = await window.firebaseFirestore.getDocs(q);
 
-          if (existingItemIndex !== -1) {
-            // العنصر موجود، تحديث الكمية
-            currentCartItems[existingItemIndex].quantity += 1;
+          if (!querySnapshot.empty) {
+              const existingDocRef = querySnapshot.docs[0].ref;
+              const currentQuantity = querySnapshot.docs[0].data().quantity || 0;
+              await window.firebaseFirestore.updateDoc(
+                  existingDocRef,
+                  {
+                      quantity: currentQuantity + 1,
+                      updatedAt: window.firebaseFirestore.serverTimestamp()
+                  }
+              );
+              setModal({ message: 'تم التحديث!', `تم تحديث كمية المنتج "${productToAdd.name}" في سلتك إلى ${currentQuantity + 1}.`, type: 'success', onClose: () => setModal(null) });
+              console.log("Cart: Updated quantity for existing product:", productToAdd.name);
           } else {
-            // العنصر غير موجود، إضافة عنصر جديد بكمية 1
-            currentCartItems.push({ ...productToAdd, quantity: 1 });
+              await window.firebaseFirestore.addDoc(cartItemsCollectionRef, {
+                  productId: productToAdd.id, 
+                  name: productToAdd.name,
+                  displayPrice: productToAdd.displayPrice,
+                  img: productToAdd.img,
+                  link: productToAdd.link,
+                  quantity: 1, 
+                  createdAt: window.firebaseFirestore.serverTimestamp(),
+                  userId: currentUser.uid 
+              });
+              setModal({ message: 'تمت الإضافة بنجاح!', `تم إضافة المنتج "${productToAdd.name}" إلى سلتك.`, type: 'success', onClose: () => setModal(null) });
+              console.log("Cart: Added new product:", productToAdd.name);
           }
-
-          // تحديث المستند في Firestore
-          await window.firebaseFirestore.setDoc(userCartDocRef, {
-            items: currentCartItems // تخزين المصفوفة المحدثة
-          }, { merge: true }); // استخدام merge لتحديث حقل "items" فقط إذا كانت الحقول الأخرى موجودة
-
-          setModal({ message: 'تم إضافة المنتج إلى السلة بنجاح!', type: 'success', onClose: () => setModal(null) });
-
         } catch (error) {
-          console.error("خطأ في الإضافة إلى سلة التسوق:", error);
+          console.error("Error adding to cart: ", error);
           setModal({ message: `فشل إضافة المنتج إلى السلة: ${error.message}`, type: 'error', onClose: () => setModal(null) });
         }
       };
@@ -917,7 +1017,7 @@
 
       return (
         <div dir="rtl" className="flex-grow flex flex-col">
-          <Header currentUser={currentUser} cartItemCount={cartItemCount} />
+          <Header currentUser={currentUser} /> {/* cartItemCount is now managed internally by Header */}
 
           <main className="container mx-auto my-6 px-2.5 relative z-30 flex-grow">
             {/* Hero Section / Banner - تم تحديث النص ليتغير ديناميكيًا وتعديل الارتفاع */}
@@ -925,7 +1025,7 @@
               <h2 className="text-xl font-extrabold mb-1">
                 {promoPhrases[currentPhraseIndex]}
               </h2>
-              <a href="allcategorues.html" className="btn-primary mt-6 text-sm">
+              <a href="all-categories.html" className="btn-primary mt-6 text-sm"> {/* Changed to all-categories.html */}
                 تسوق الآن
               </a>
             </section>
@@ -946,7 +1046,7 @@
 
             {/* Shopping Image Carousel Section - معرض صور دوار */}
             <section className="mb-8">
-              <h2 className="text-xl font-bold text-white mb-4">اكتشف أحدث العروض</h2>
+              {/* تم حذف العنوان "اكتشف أحدث العروض" */}
               <ImageCarousel images={shoppingImages} />
             </section>
           </main>
