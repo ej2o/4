@@ -32,7 +32,7 @@
       apiKey: "AIzaSyCuttEadee0V2YOZHmG53a2Rck7AvFCFEM",
       authDomain: "mercato-2cf1d.firebaseapp.com",
       projectId: "mercato-2cf1d",
-      storageBucket: "mercato-2cf1d.firebasestorage.app",
+      storageBucket: "mercato-2cf1d.firebas1d.firebasestorage.app",
       messagingSenderId: "896887505927",
       appId: "1:896887505927:web:6cb474408bdcfdb1e216a2", // تم تحديث هذا الـ appId
       measurementId: "G-4WNGK0W077"
@@ -347,80 +347,6 @@
     .category-card .category-name {
       font-size: 0.8rem; /* خط أصغر لأسماء الفئات */
     }
-
-    /* أنماط معرض الصور الدوار */
-    .shopping-image-carousel-container {
-        position: relative;
-        width: 100%;
-        max-width: 500px; /* تحديد أقصى عرض للحاوية */
-        height: 250px; /* تحديد ارتفاع ثابت للحاوية */
-        margin: 0 auto;
-        overflow: hidden; /* لإخفاء الصور الزائدة */
-        border-radius: 12px;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
-    }
-
-    .shopping-image-wrapper {
-        display: flex;
-        width: 100%;
-        height: 100%;
-        transition: transform 0.5s ease-in-out; /* تأثير الانتقال بين الصور */
-    }
-
-    .shopping-image-wrapper img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover; /* لضمان تغطية الصورة للحاوية بالكامل */
-        flex-shrink: 0; /* لمنع الصور من الانكماش */
-    }
-
-    .carousel-button {
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        background-color: rgba(0, 0, 0, 0.5);
-        color: white;
-        padding: 0.5rem;
-        border-radius: 50%;
-        z-index: 10;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-    }
-
-    .carousel-button:hover {
-        background-color: rgba(0, 0, 0, 0.75);
-    }
-
-    .carousel-button.left {
-        right: 0.5rem;
-    }
-
-    .carousel-button.right {
-        left: 0.5rem;
-    }
-
-    .carousel-dots {
-        position: absolute;
-        bottom: 1rem;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        gap: 0.5rem;
-        z-index: 10;
-    }
-
-    .carousel-dot {
-        width: 0.5rem;
-        height: 0.5rem;
-        border-radius: 50%;
-        background-color: rgba(255, 255, 255, 0.5);
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-    }
-
-    .carousel-dot.active {
-        background-color: #D4AF37; /* اللون الذهبي */
-    }
   </style>
 </head>
 <body class="font-cairo antialiased overflow-x-hidden">
@@ -689,107 +615,121 @@
     };
 
     // --- مكون معرض الصور الدوار (Image Carousel Component) ---
-    const ImageCarousel = ({ images }) => {
-      const [currentImageIndex, setCurrentImageIndex] = useState(0);
-      const [isDragging, setIsDragging] = useState(false);
-      const [startX, setStartX] = useState(0);
-      const [currentX, setCurrentX] = useState(0);
+    // تم حذف هذا المكون بالكامل لأنه لم يعد يستخدم
+    // const ImageCarousel = ({ images }) => {
+    //   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    //   const [isDragging, setIsDragging] = useState(false);
+    //   const [startX, setStartX] = useState(0);
+    //   const [currentX, setCurrentX] = useState(0);
 
-      // Automatic slide change
-      useEffect(() => {
-        const interval = setInterval(() => {
-          setCurrentImageIndex((prevIndex) => (prevIndex + 1) % images.length);
-        }, 3000); // 3 seconds as requested
-        return () => clearInterval(interval);
-      }, [images.length]);
+    //   // Automatic slide change
+    //   useEffect(() => {
+    //     const interval = setInterval(() => {
+    //       setCurrentImageIndex((prevIndex) => (prevIndex + 1) % images.length);
+    //     }, 3000); // 3 seconds as requested
+    //     return () => clearInterval(interval);
+    //   }, [images.length]);
 
-      // Manual navigation
-      const goToPrev = () => {
-        setCurrentImageIndex((prevIndex) => (prevIndex - 1 + images.length) % images.length);
-      };
+    //   // Manual navigation
+    //   const goToPrev = () => {
+    //     setCurrentImageIndex((prevIndex) => (prevIndex - 1 + images.length) % images.length);
+    //   };
 
-      const goToNext = () => {
-        setCurrentImageIndex((prevIndex) => (prevIndex + 1) % images.length);
-      };
+    //   const goToNext = () => {
+    //     setCurrentImageIndex((prevIndex) => (prevIndex + 1) % images.length);
+    //   };
 
-      // Touch handlers for swiping
-      const handleTouchStart = (e) => {
-        setIsDragging(true);
-        setStartX(e.touches[0].clientX);
-        setCurrentX(e.touches[0].clientX); // Initialize currentX
-      };
+    //   // Touch handlers for swiping
+    //   const handleTouchStart = (e) => {
+    //     setIsDragging(true);
+    //     setStartX(e.touches[0].clientX);
+    //     setCurrentX(e.touches[0].clientX); // Initialize currentX
+    //   };
 
-      const handleTouchMove = (e) => {
-        if (!isDragging) return;
-        setCurrentX(e.touches[0].clientX);
-      };
+    //   const handleTouchMove = (e) => {
+    //     if (!isDragging) return;
+    //     setCurrentX(e.touches[0].clientX);
+    //   };
 
-      const handleTouchEnd = () => {
-        setIsDragging(false);
-        const diffX = currentX - startX;
-        if (diffX > 50) { // Swiped right (prev image)
-          goToPrev();
-        } else if (diffX < -50) { // Swiped left (next image)
-          goToNext();
-        }
-        setStartX(0);
-        setCurrentX(0);
-      };
+    //   const handleTouchEnd = () => {
+    //     setIsDragging(false);
+    //     const diffX = currentX - startX;
+    //     if (diffX > 50) { // Swiped right (prev image)
+    //       goToPrev();
+    //     } else if (diffX < -50) { // Swiped left (next image)
+    //       goToNext();
+    //     }
+    //     setStartX(0);
+    //     setCurrentX(0);
+    //   };
 
-      return (
-        <div className="shopping-image-carousel-container">
-          {/* Image display with transition */}
-          <div
-            className="shopping-image-wrapper"
-            style={{ transform: `translateX(-${currentImageIndex * 100}%)` }}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-          >
-            {images.map((imgSrc, index) => (
-              <img
-                key={index}
-                src={imgSrc}
-                alt={`صورة تسوق ${index + 1}`}
-                className="w-full h-full object-cover flex-shrink-0"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = `https://placehold.co/800x400/1F2E40/F8F8F8?text=صورة+تسوق+${index + 1}`;
-                }}
-              />
-            ))}
-          </div>
+    //   return (
+    //     <div className="shopping-image-carousel-container">
+    //       {/* Image display with transition */}
+    //       <div
+    //         className="shopping-image-wrapper"
+    //         style={{ transform: `translateX(-${currentImageIndex * 100}%)` }}
+    //         onTouchStart={handleTouchStart}
+    //         onTouchMove={handleTouchMove}
+    //         onTouchEnd={handleTouchEnd}
+    //       >
+    //         {/* إذا كانت مصفوفة الصور فارغة، يمكن عرض صورة افتراضية أو لا شيء */}
+    //         {images.length > 0 ? (
+    //           images.map((imgSrc, index) => (
+    //             <img
+    //               key={index}
+    //               src={imgSrc}
+    //               alt={`صورة تسوق ${index + 1}`}
+    //               className="w-full h-full object-cover flex-shrink-0"
+    //               onError={(e) => {
+    //                 e.target.onerror = null;
+    //                 e.target.src = `https://placehold.co/800x400/1F2E40/F8F8F8?text=لا+توجد+صور`;
+    //               }}
+    //             />
+    //           ))
+    //         ) : (
+    //           <div className="w-full h-full flex items-center justify-center bg-gray-800 text-gray-400 text-lg">
+    //             لا توجد صور لعرضها
+    //           </div>
+    //         )}
+    //       </div>
 
-          {/* Navigation buttons */}
-          <button
-            onClick={goToPrev}
-            className="carousel-button left"
-            aria-label="الصورة السابقة"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-          <button
-            onClick={goToNext}
-            className="carousel-button right"
-            aria-label="الصورة التالية"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-right"><path d="m9 18 6-6-6-6"/></svg>
-          </button>
+    //       {/* Navigation buttons - تظهر فقط إذا كانت هناك صور */}
+    //       {images.length > 0 && (
+    //         <>
+    //           <button
+    //             onClick={goToPrev}
+    //             className="carousel-button left"
+    //             aria-label="الصورة السابقة"
+    //           >
+    //             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
+    //           </button>
+    //           <button
+    //             onClick={goToNext}
+    //             className="carousel-button right"
+    //             aria-label="الصورة التالية"
+    //           >
+    //             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-right"><path d="m9 18 6-6-6-6"/></svg>
+    //           </button>
+    //         </>
+    //       )}
 
-          {/* Dots for navigation */}
-          <div className="carousel-dots">
-            {images.map((_, index) => (
-              <button
-                key={index}
-                onClick={() => setCurrentImageIndex(index)}
-                className={`carousel-dot ${currentImageIndex === index ? 'active' : ''}`}
-                aria-label={`الانتقال إلى الصورة ${index + 1}`}
-              ></button>
-            ))}
-          </div>
-        </div>
-      );
-    };
+    //       {/* Dots for navigation - تظهر فقط إذا كانت هناك صور */}
+    //       {images.length > 0 && (
+    //         <div className="carousel-dots">
+    //           {images.map((_, index) => (
+    //             <button
+    //               key={index}
+    //               onClick={() => setCurrentImageIndex(index)}
+    //               className={`carousel-dot ${currentImageIndex === index ? 'active' : ''}`}
+    //               aria-label={`الانتقال إلى الصورة ${index + 1}`}
+    //             ></button>
+    //           ))}
+    //         </div>
+    //       )}
+    //     </div>
+    //   );
+    // };
 
     // --- مكون الصفحة الرئيسية (App Component) ---
     const App = ({ currentUser }) => {
@@ -809,14 +749,8 @@
       ];
       const [currentPhraseIndex, setCurrentPhraseIndex] = useState(0);
 
-      // صور التسوق الجديدة (الروابط التي قدمتها)
-      const shoppingImages = [
-        'https://i.postimg.cc/N0V8zYMw/Screenshot-Canva.jpg',
-        'https://i.postimg.cc/P5SQ11nJ/Screenshot-Canva.jpg',
-        'https://i.postimg.cc/DwvcWBDR/Screenshot-Canva.jpg',
-        'https://i.postimg.cc/m2Gj4bSL/Screenshot-Canva.jpg',
-        'https://i.postimg.cc/T1ncbSTv/Screenshot-Canva.jpg'
-      ];
+      // تم حذف مصفوفة صور التسوق بالكامل
+      // const shoppingImages = [];
 
 
       // تأثير لتغيير عبارة اللافتة كل 4 ثوانٍ
@@ -944,11 +878,10 @@
               </div>
             </section>
 
-            {/* Shopping Image Carousel Section - معرض صور دوار */}
-            <section className="mb-8">
-              {/* تم حذف النص "اكتشف أحدث العروض" هنا */}
+            {/* تم حذف قسم معرض الصور الدوار بالكامل */}
+            {/* <section className="mb-8">
               <ImageCarousel images={shoppingImages} />
-            </section>
+            </section> */}
           </main>
 
           <ScrollToTopButton />
